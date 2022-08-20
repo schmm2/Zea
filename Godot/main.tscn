@@ -1,0 +1,240 @@
+[gd_scene load_steps=20 format=2]
+
+[ext_resource path="res://scripts/wfc3d_main.gd" type="Script" id=1]
+[ext_resource path="res://shaders/post_effects_shader.shader" type="Shader" id=2]
+[ext_resource path="res://shaders/water_shader.shader" type="Shader" id=3]
+[ext_resource path="res://textures/water_mask.png" type="Texture" id=4]
+
+[sub_resource type="QuadMesh" id=1]
+size = Vector2( 2, 2 )
+
+[sub_resource type="ShaderMaterial" id=2]
+shader = ExtResource( 2 )
+shader_param/fog_colour = Color( 1, 1, 1, 1 )
+shader_param/sun_colour = Color( 1, 1, 1, 1 )
+shader_param/fog_opacity = 0.6
+shader_param/fog_density = 10.0
+shader_param/fog_hdr_multiplier = 1.0
+shader_param/sun_hdr_multiplier = 1.0
+shader_param/sun = Vector3( 0.5, -0.5, 0 )
+shader_param/sun_power = 0.91
+
+[sub_resource type="GDScript" id=3]
+script/source = "extends Camera
+
+
+const LOOK_SENS = 0.005
+const ROLL_SPEED = 1.0
+const SCROLL_WHEEL_UP_INDEX = 4
+const SCROLL_WHEEL_DOWN_INDEX = 5
+
+var mouse_modes = [
+	Input.MOUSE_MODE_CAPTURED,
+	Input.MOUSE_MODE_CONFINED
+]
+
+
+var move_speed = 1.0
+var mouse_mode = 0
+
+func _ready():
+	Input.set_mouse_mode(Input.MOUSE_MODE_CAPTURED)
+
+func _process(delta):
+	var movement_vector = Vector3.ZERO
+	var roll = Vector3.ZERO
+	
+	if Input.is_action_pressed(\"forward\"):
+		movement_vector += Vector3.FORWARD
+	if Input.is_action_pressed(\"backward\"):
+		movement_vector += Vector3.BACK
+	if Input.is_action_pressed(\"right\"):
+		movement_vector += Vector3.RIGHT
+	if Input.is_action_pressed(\"left\"):
+		movement_vector += Vector3.LEFT
+	if Input.is_action_just_pressed(\"cycle_mouse\"):
+		mouse_mode += 1
+		mouse_mode = (mouse_mode % 2)
+		print(mouse_mode)
+		Input.set_mouse_mode(mouse_modes[mouse_mode])
+	
+	translate_object_local(movement_vector.normalized() * delta * move_speed)
+	
+	if Input.is_action_pressed(\"rollr\"):
+		roll += Vector3.FORWARD
+	if Input.is_action_pressed(\"rolll\"):
+		roll += Vector3.BACK
+	
+	if roll:
+		rotate_object_local(roll, ROLL_SPEED * delta)
+
+func _input(event):
+	if mouse_mode == 1:
+		Input.set_mouse_mode(mouse_modes[mouse_mode])		
+		return
+	var mouse_delta = Vector2.ZERO
+	if event is InputEventMouseMotion:
+		mouse_delta = event.relative * LOOK_SENS
+		rotate_y(-mouse_delta.x)
+		rotate_object_local(Vector3.RIGHT, -mouse_delta.y)
+	elif event is InputEventMouseButton:
+		if event.button_index == SCROLL_WHEEL_UP_INDEX:
+			move_speed *= 1.5
+		elif event.button_index == SCROLL_WHEEL_DOWN_INDEX:
+			move_speed *= 0.75
+			
+"
+
+[sub_resource type="ProceduralSky" id=4]
+
+[sub_resource type="Environment" id=5]
+background_sky = SubResource( 4 )
+ambient_light_color = Color( 1, 1, 1, 1 )
+fog_sun_amount = 1.0
+fog_depth_begin = 0.0
+fog_depth_curve = 0.112656
+fog_transmit_curve = 0.164939
+ssao_radius = 35.0
+ssao_intensity = 113.1
+
+[sub_resource type="GDScript" id=7]
+script/source = "extends Spatial
+
+
+var rot_speed = 10.0
+
+
+# Called when the node enters the scene tree for the first time.
+func _ready():
+	pass # Replace with function body.
+
+
+func _process(delta):
+	rotation_degrees.y += rot_speed * delta
+"
+
+[sub_resource type="PlaneMesh" id=8]
+size = Vector2( 80, 80 )
+subdivide_width = 150
+subdivide_depth = 150
+
+[sub_resource type="Gradient" id=9]
+offsets = PoolRealArray( 0, 0.495017, 1 )
+colors = PoolColorArray( 0.264, 0.4686, 0.66, 1, 0.268, 0.4757, 0.67, 1, 0.8036, 0.89474, 0.98, 1 )
+
+[sub_resource type="GradientTexture" id=10]
+gradient = SubResource( 9 )
+
+[sub_resource type="OpenSimplexNoise" id=11]
+period = 11.2
+persistence = 0.475
+lacunarity = 4.0
+
+[sub_resource type="NoiseTexture" id=12]
+noise = SubResource( 11 )
+
+[sub_resource type="ShaderMaterial" id=13]
+shader = ExtResource( 3 )
+shader_param/tilingA = 10.0
+shader_param/tilingB = 22.223
+shader_param/scroll_speedA = Vector2( 0.017, 0 )
+shader_param/scroll_speedB = Vector2( 0, 0.03 )
+shader_param/noise_scale = 0.105
+shader_param/noise_scale2 = 0.422
+shader_param/displacement_amplitude = 0.155
+shader_param/displacement_scroll_speed = 0.058
+shader_param/test = 4.6
+shader_param/test2 = 3.68
+shader_param/test3 = 5.677
+shader_param/mask = ExtResource( 4 )
+shader_param/gradient = SubResource( 10 )
+shader_param/noise = SubResource( 12 )
+
+[sub_resource type="SpatialMaterial" id=14]
+resource_name = "Grass"
+params_specular_mode = 4
+albedo_color = Color( 0.1479, 0.51, 0.359125, 1 )
+
+[sub_resource type="SpatialMaterial" id=15]
+resource_name = "Beach"
+params_specular_mode = 4
+albedo_color = Color( 0.71, 0.609298, 0.4473, 1 )
+
+[sub_resource type="ArrayMesh" id=16]
+resource_name = "wfc_module_2"
+surfaces/0 = {
+"aabb": AABB( -0.5, -0.0150424, -0.499991, 0.533196, 0.0150524, 0.999991 ),
+"array_data": PoolByteArray( 0, 57, 153, 189, 0, 0, 0, 0, 60, 92, 62, 190, 13, 126, 2, 0, 146, 12, 195, 127, 0, 54, 95, 55, 0, 0, 0, 191, 0, 0, 0, 0, 0, 0, 0, 63, 0, 127, 0, 0, 127, 0, 0, 127, 0, 54, 0, 55, 0, 0, 0, 191, 0, 0, 0, 0, 222, 254, 255, 190, 0, 127, 0, 0, 146, 0, 195, 127, 0, 54, 128, 55, 0, 161, 160, 189, 0, 0, 0, 0, 0, 0, 17, 55, 14, 126, 0, 0, 127, 0, 0, 127, 0, 54, 0, 55, 0, 0, 0, 191, 0, 0, 0, 0, 0, 0, 0, 63, 0, 127, 0, 0, 127, 0, 0, 127, 0, 54, 0, 55, 0, 57, 153, 189, 0, 0, 0, 0, 60, 92, 62, 190, 13, 126, 2, 0, 146, 12, 195, 127, 0, 54, 95, 55, 0, 0, 0, 191, 0, 0, 0, 0, 0, 0, 0, 63, 0, 127, 0, 0, 127, 0, 0, 127, 0, 54, 0, 54, 160, 0, 116, 189, 0, 0, 0, 0, 252, 11, 144, 62, 13, 126, 0, 0, 127, 0, 0, 129, 0, 54, 111, 54, 32, 28, 8, 189, 0, 0, 0, 0, 0, 0, 0, 63, 15, 125, 255, 0, 127, 0, 0, 127, 0, 54, 0, 54, 0, 0, 0, 191, 0, 0, 0, 0, 222, 254, 255, 190, 0, 127, 0, 0, 127, 0, 0, 127, 0, 54, 128, 55, 32, 28, 8, 189, 0, 0, 0, 0, 222, 254, 255, 190, 14, 126, 0, 0, 127, 0, 0, 127, 0, 54, 0, 56, 192, 1, 243, 188, 0, 0, 0, 0, 160, 216, 160, 190, 16, 125, 3, 0, 127, 0, 0, 129, 0, 54, 160, 55, 0, 0, 0, 191, 0, 0, 0, 0, 0, 0, 0, 63, 0, 127, 0, 0, 127, 0, 0, 127, 0, 54, 128, 54, 0, 161, 160, 189, 0, 0, 0, 0, 0, 0, 17, 55, 14, 126, 0, 0, 127, 0, 0, 127, 0, 54, 0, 55, 160, 19, 64, 189, 0, 0, 0, 0, 36, 234, 95, 62, 16, 125, 0, 0, 127, 0, 0, 129, 0, 54, 144, 54, 128, 204, 130, 60, 64, 116, 118, 188, 36, 234, 95, 62, 51, 116, 255, 0, 127, 0, 0, 127, 0, 54, 144, 54, 0, 161, 160, 189, 0, 0, 0, 0, 0, 0, 17, 55, 14, 126, 0, 0, 127, 0, 0, 127, 0, 54, 0, 55, 128, 32, 127, 188, 64, 116, 118, 188, 0, 0, 17, 55, 47, 117, 254, 0, 127, 0, 0, 127, 0, 54, 0, 55, 160, 19, 64, 189, 0, 0, 0, 0, 36, 234, 95, 62, 16, 125, 0, 0, 127, 0, 0, 129, 0, 54, 144, 54, 0, 161, 160, 189, 0, 0, 0, 0, 0, 0, 17, 55, 14, 126, 0, 0, 127, 0, 0, 127, 0, 54, 0, 55, 128, 204, 130, 60, 64, 116, 118, 188, 36, 234, 95, 62, 51, 116, 255, 0, 127, 0, 0, 127, 0, 54, 144, 54, 128, 32, 127, 188, 64, 116, 118, 188, 0, 0, 17, 55, 47, 117, 254, 0, 127, 0, 0, 127, 0, 54, 0, 55, 0, 57, 153, 189, 0, 0, 0, 0, 60, 92, 62, 190, 13, 126, 2, 0, 146, 12, 195, 127, 0, 54, 95, 55, 128, 224, 67, 188, 96, 116, 118, 188, 60, 92, 62, 190, 47, 117, 6, 0, 127, 0, 0, 129, 0, 54, 95, 55, 0, 161, 160, 189, 0, 0, 0, 0, 0, 0, 17, 55, 14, 126, 0, 0, 127, 0, 0, 127, 0, 54, 0, 55, 0, 57, 153, 189, 0, 0, 0, 0, 60, 92, 62, 190, 13, 126, 2, 0, 146, 12, 195, 127, 0, 54, 95, 55, 128, 32, 127, 188, 64, 116, 118, 188, 0, 0, 17, 55, 47, 117, 254, 0, 127, 0, 0, 127, 0, 54, 0, 55, 192, 1, 243, 188, 0, 0, 0, 0, 160, 216, 160, 190, 16, 125, 3, 0, 127, 0, 0, 129, 0, 54, 160, 55, 128, 187, 242, 60, 64, 116, 118, 188, 222, 254, 255, 190, 49, 116, 0, 0, 127, 0, 0, 127, 0, 54, 0, 56, 0, 249, 7, 61, 64, 116, 118, 188, 160, 216, 160, 190, 55, 113, 11, 0, 127, 0, 0, 129, 0, 54, 160, 55, 192, 1, 243, 188, 0, 0, 0, 0, 160, 216, 160, 190, 16, 125, 3, 0, 127, 0, 0, 129, 0, 54, 160, 55, 32, 28, 8, 189, 0, 0, 0, 0, 222, 254, 255, 190, 14, 126, 0, 0, 127, 0, 0, 127, 0, 54, 0, 56, 128, 187, 242, 60, 64, 116, 118, 188, 222, 254, 255, 190, 49, 116, 0, 0, 127, 0, 0, 127, 0, 54, 0, 56, 0, 57, 153, 189, 0, 0, 0, 0, 60, 92, 62, 190, 13, 126, 2, 0, 146, 12, 195, 127, 0, 54, 95, 55, 0, 0, 0, 191, 0, 0, 0, 0, 222, 254, 255, 190, 0, 127, 0, 0, 146, 0, 195, 127, 0, 54, 128, 55, 192, 1, 243, 188, 0, 0, 0, 0, 160, 216, 160, 190, 16, 125, 3, 0, 147, 15, 194, 127, 255, 53, 160, 55, 0, 57, 153, 189, 0, 0, 0, 0, 60, 92, 62, 190, 13, 126, 2, 0, 146, 12, 195, 127, 0, 54, 95, 55, 0, 249, 7, 61, 64, 116, 118, 188, 160, 216, 160, 190, 55, 113, 11, 0, 127, 0, 0, 129, 0, 54, 160, 55, 128, 224, 67, 188, 96, 116, 118, 188, 60, 92, 62, 190, 47, 117, 6, 0, 127, 0, 0, 129, 0, 54, 95, 55, 0, 57, 153, 189, 0, 0, 0, 0, 60, 92, 62, 190, 13, 126, 2, 0, 146, 12, 195, 127, 0, 54, 95, 55, 192, 1, 243, 188, 0, 0, 0, 0, 160, 216, 160, 190, 16, 125, 3, 0, 127, 0, 0, 129, 0, 54, 160, 55, 0, 249, 7, 61, 64, 116, 118, 188, 160, 216, 160, 190, 55, 113, 11, 0, 127, 0, 0, 129, 0, 54, 160, 55, 160, 0, 116, 189, 0, 0, 0, 0, 252, 11, 144, 62, 13, 126, 0, 0, 127, 0, 0, 129, 0, 54, 111, 54, 0, 0, 0, 191, 0, 0, 0, 0, 0, 0, 0, 63, 0, 127, 0, 0, 127, 0, 0, 127, 0, 54, 120, 54, 160, 19, 64, 189, 0, 0, 0, 0, 36, 234, 95, 62, 16, 125, 0, 0, 127, 0, 0, 129, 0, 54, 128, 54, 160, 0, 116, 189, 0, 0, 0, 0, 252, 11, 144, 62, 13, 126, 0, 0, 127, 0, 0, 129, 0, 54, 111, 54, 128, 204, 130, 60, 64, 116, 118, 188, 36, 234, 95, 62, 51, 116, 255, 0, 127, 0, 0, 127, 0, 54, 144, 54, 0, 148, 87, 59, 64, 116, 118, 188, 252, 11, 144, 62, 45, 118, 2, 0, 127, 0, 0, 129, 0, 54, 111, 54, 160, 0, 116, 189, 0, 0, 0, 0, 252, 11, 144, 62, 13, 126, 0, 0, 127, 0, 0, 129, 0, 54, 111, 54, 160, 19, 64, 189, 0, 0, 0, 0, 36, 234, 95, 62, 16, 125, 0, 0, 127, 0, 0, 129, 0, 54, 144, 54, 128, 204, 130, 60, 64, 116, 118, 188, 36, 234, 95, 62, 51, 116, 255, 0, 127, 0, 0, 127, 0, 54, 144, 54, 32, 28, 8, 189, 0, 0, 0, 0, 0, 0, 0, 63, 15, 125, 255, 0, 127, 0, 0, 127, 0, 54, 0, 54, 0, 148, 87, 59, 64, 116, 118, 188, 252, 11, 144, 62, 45, 118, 2, 0, 127, 0, 0, 129, 0, 54, 111, 54, 128, 187, 242, 60, 96, 116, 118, 188, 0, 0, 0, 63, 51, 116, 250, 0, 127, 0, 0, 127, 0, 54, 0, 54, 32, 28, 8, 189, 0, 0, 0, 0, 0, 0, 0, 63, 15, 125, 255, 0, 127, 0, 0, 127, 0, 54, 0, 54, 160, 0, 116, 189, 0, 0, 0, 0, 252, 11, 144, 62, 13, 126, 0, 0, 127, 0, 0, 129, 0, 54, 111, 54, 0, 148, 87, 59, 64, 116, 118, 188, 252, 11, 144, 62, 45, 118, 2, 0, 127, 0, 0, 129, 0, 54, 111, 54 ),
+"array_index_data": PoolByteArray(  ),
+"blend_shape_data": [  ],
+"format": 97303,
+"index_count": 0,
+"material": SubResource( 14 ),
+"primitive": 4,
+"skeleton_aabb": [  ],
+"vertex_count": 57
+}
+surfaces/1 = {
+"aabb": AABB( -0.0155717, -0.253834, -0.499991, 0.415572, 0.238801, 0.999991 ),
+"array_data": PoolByteArray( 128, 32, 127, 188, 64, 116, 118, 188, 0, 0, 17, 55, 47, 117, 254, 0, 103, 214, 197, 129, 0, 54, 0, 55, 204, 204, 204, 62, 121, 246, 129, 190, 0, 0, 0, 63, 66, 108, 254, 0, 127, 0, 0, 127, 0, 54, 0, 55, 128, 204, 130, 60, 64, 116, 118, 188, 36, 234, 95, 62, 51, 116, 255, 0, 127, 0, 0, 127, 0, 54, 144, 54, 128, 32, 127, 188, 64, 116, 118, 188, 0, 0, 17, 55, 47, 117, 254, 0, 103, 214, 197, 129, 0, 54, 0, 55, 204, 204, 204, 62, 121, 246, 129, 190, 222, 254, 255, 190, 66, 108, 3, 0, 96, 199, 197, 129, 0, 54, 128, 55, 204, 204, 204, 62, 121, 246, 129, 190, 0, 0, 0, 63, 66, 108, 254, 0, 127, 0, 0, 127, 0, 54, 0, 55, 128, 32, 127, 188, 64, 116, 118, 188, 0, 0, 17, 55, 47, 117, 254, 0, 103, 214, 197, 129, 0, 54, 0, 55, 128, 224, 67, 188, 96, 116, 118, 188, 60, 92, 62, 190, 47, 117, 6, 0, 105, 217, 198, 129, 255, 53, 95, 55, 204, 204, 204, 62, 121, 246, 129, 190, 222, 254, 255, 190, 66, 108, 3, 0, 96, 199, 197, 129, 0, 54, 128, 55, 204, 204, 204, 62, 121, 246, 129, 190, 0, 0, 0, 63, 66, 108, 254, 0, 127, 0, 0, 127, 0, 54, 128, 54, 128, 187, 242, 60, 96, 116, 118, 188, 0, 0, 0, 63, 51, 116, 250, 0, 127, 0, 0, 127, 0, 54, 0, 54, 0, 148, 87, 59, 64, 116, 118, 188, 252, 11, 144, 62, 45, 118, 2, 0, 127, 0, 0, 129, 0, 54, 111, 54, 0, 249, 7, 61, 64, 116, 118, 188, 160, 216, 160, 190, 55, 113, 11, 0, 127, 0, 0, 129, 0, 54, 160, 55, 204, 204, 204, 62, 121, 246, 129, 190, 222, 254, 255, 190, 66, 108, 3, 0, 127, 0, 0, 129, 0, 54, 128, 55, 128, 224, 67, 188, 96, 116, 118, 188, 60, 92, 62, 190, 47, 117, 6, 0, 127, 0, 0, 129, 0, 54, 95, 55, 128, 187, 242, 60, 64, 116, 118, 188, 222, 254, 255, 190, 49, 116, 0, 0, 127, 0, 0, 127, 0, 54, 0, 56, 204, 204, 204, 62, 121, 246, 129, 190, 222, 254, 255, 190, 66, 108, 3, 0, 127, 0, 0, 129, 0, 54, 0, 56, 0, 249, 7, 61, 64, 116, 118, 188, 160, 216, 160, 190, 55, 113, 11, 0, 127, 0, 0, 129, 0, 54, 160, 55, 128, 204, 130, 60, 64, 116, 118, 188, 36, 234, 95, 62, 51, 116, 255, 0, 127, 0, 0, 127, 0, 54, 144, 54, 204, 204, 204, 62, 121, 246, 129, 190, 0, 0, 0, 63, 66, 108, 254, 0, 127, 0, 0, 127, 0, 54, 134, 54, 0, 148, 87, 59, 64, 116, 118, 188, 252, 11, 144, 62, 45, 118, 2, 0, 127, 0, 0, 129, 0, 54, 131, 54 ),
+"array_index_data": PoolByteArray(  ),
+"blend_shape_data": [  ],
+"format": 97303,
+"index_count": 0,
+"material": SubResource( 15 ),
+"primitive": 4,
+"skeleton_aabb": [  ],
+"vertex_count": 21
+}
+
+[node name="root" type="Spatial"]
+script = ExtResource( 1 )
+
+[node name="DepthFog" type="MeshInstance" parent="."]
+visible = false
+extra_cull_margin = 16384.0
+mesh = SubResource( 1 )
+material/0 = SubResource( 2 )
+
+[node name="FlyCam" type="Camera" parent="."]
+transform = Transform( 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 5.83381 )
+fov = 30.0
+script = SubResource( 3 )
+
+[node name="DirectionalLight" type="DirectionalLight" parent="."]
+transform = Transform( 0.781684, -0.488959, 0.387155, 0, 0.620765, 0.783997, -0.623675, -0.612838, 0.485242, 0, 0, 0 )
+shadow_enabled = true
+directional_shadow_blend_splits = true
+directional_shadow_max_distance = 300.0
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+environment = SubResource( 5 )
+
+[node name="DebugText" type="RichTextLabel" parent="."]
+anchor_right = 1.0
+anchor_bottom = 1.0
+mouse_filter = 2
+__meta__ = {
+"_edit_use_anchors_": false
+}
+
+[node name="CamFocus" type="Spatial" parent="."]
+transform = Transform( 1, 0, 0, 0, 1, 0, 0, 0, 1, 3.5, 0, 3.5 )
+script = SubResource( 7 )
+
+[node name="RotatingCam" type="Camera" parent="CamFocus"]
+transform = Transform( 1, 0, 0, 0, 0.783086, 0.621913, 0, -0.621913, 0.783086, 0, 9.1621, 11.5365 )
+current = true
+fov = 40.0
+
+[node name="Sea" type="MeshInstance" parent="."]
+transform = Transform( 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.114519, 0 )
+visible = false
+mesh = SubResource( 8 )
+material/0 = SubResource( 13 )
+
+[node name="ReferenceMesh" type="MeshInstance" parent="."]
+visible = false
+mesh = SubResource( 16 )
+material/0 = null
+material/1 = null
