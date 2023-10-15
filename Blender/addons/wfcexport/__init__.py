@@ -193,14 +193,19 @@ def flipConnection(connection):
         newConnection.append(newVert)
     return newConnection    
  
-def find_connections(obj, referenceObject):
+def find_connections(obj):
+    orientation = "up"
+
     field = bmesh.new()
     field.from_mesh(obj.data)
     
-    reference = bmesh.new()
-    reference.from_mesh(referenceObject.data)
     # print(field.verts)    
     # print(reference.verts)
+    
+    # check orientation of triangle up/down
+    if "orientation" in obj.keys():
+        print("orientation",obj["orientation"])
+        orientation = obj["orientation"]
     
     foundCollisionPoints = list()
     
@@ -271,7 +276,7 @@ def export_selection():
         copy.name = MESH_NAME + str(mi)
         modules.append(copy)
         
-        connections = find_connections(obj, referenceObject)
+        connections = find_connections(copy)
         print("Found connections: ",len(connections))
         # print(connections)
         
