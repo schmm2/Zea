@@ -25,6 +25,7 @@ addon_keymaps = []
 
 print("****************")
 print("******START*********")
+print("******Version 1.1*********")
 print("****************")
 
 def duplicateMesh(obj):
@@ -169,6 +170,13 @@ def compareConnections(b1, b2):
                 return False
         return True
 
+def round_position(vec, i):
+    result = Vector([0.0, 0.0, 0.0])
+    result.x = round(vec.x, i)
+    result.y = round(vec.y, i)
+    result.z = round(vec.z, i)
+    return result
+
 def connectionExistsInDictionary(connection, connectionDictionary):
     if len(connectionDictionary.keys()) == 0:
         return False
@@ -194,10 +202,10 @@ def find_connections(obj, referenceObject):
     # print(field.verts)    
     # print(reference.verts)
     
-    connections = []
+    foundCollisionPoints = list()
     
     for face in reference.faces:
-        collision_points = []
+        collision_points = list()
              
         #print(len(field.verts))  
           
@@ -221,7 +229,8 @@ def find_connections(obj, referenceObject):
                     insideFace = intersect_point_tri_2d(vertOfField.co,face.verts[0].co,face.verts[1].co,face.verts[2].co)
                 
                 if (insideFace == 1) and (vertOfField.co not in collision_points):
-                    collision_points.append(vertOfField.co)
+                    roundedPosition = round_position(vertOfField.co, 4)
+                    collision_points.append(roundedPosition)
                 
         # debug only: Print the collision points
         if debug == True:
@@ -232,10 +241,10 @@ def find_connections(obj, referenceObject):
         # add the found connections to the collection 
         if len(collision_points) > 0:
             print("collisionspoints",collision_points)
-            connections.append(collision_points)  
+            foundCollisionPoints.append(collision_points)  
     
     # return connections
-    return connections          
+    return foundCollisionPoints          
         
 
 def export_selection():
@@ -267,13 +276,14 @@ def export_selection():
         # print(connections)
         
         for i, connection in enumerate(connections):
+            
             if len(connection) == 0:
                 # no connection at all, we need the empty connection (-1) here
                 copy.data[str(i)] = "-1"
                 continue
 
-            existingConnection = connectionExistsInDictionary(connection, connectionDictionary)
-            print("found exsiting connection", existingConnection)
+            existingConnection = connectionExistsInDictionary(connection, connectionDictionary) 
+            print("found existing connection", existingConnection)
             
             if existingConnection:
                 print("existing connection")
@@ -286,19 +296,16 @@ def export_selection():
                     new_name += "s"
                     connectionDictionary[new_name] = connection
                 else:
-                    print("xxx",connectionDictionary) 
-                    print("xxx",connection)
-                    print("xxx",flipConnection(connection))
-                    connectionDictionary[new_name] = connection
-                    connectionDictionary[new_name + "f"] = flipConnection(connection)
-                    print("xxx",connectionDictionary) 
+                    newConnection = connection.copy()
+                    connectionDictionary[new_name] = newConnection
+                    connectionDictionary[new_name + "f"] = flipConnection(newConnection)
                 copy.data[str(i)] = new_name
                 bi += 1
 
         #bpy.context.collection.objects.link(copy)  #  link to scene in case we want to see what we exported
         mi += 1
     
-    print("the final connections", connectionDictionary)
+    print("final",connectionDictionary)
     return modules 
 
 
