@@ -1,37 +1,68 @@
+from mathutils.geometry import distance_point_to_plane
+from mathutils.geometry import intersect_point_tri_2d
+from mathutils.geometry import intersect_point_quad_2d
+from mathutils import Vector, Matrix
+import math
+import mathutils
+import bmesh
+import bpy
+
 bl_info = {
-   'name': 'WFC Export',
-   'author': 'Martin Donald (Original Script), Martin Schmidli',
-   'version': (1, 0, 0),
-   'blender': (2, 80, 0), # supports 2.8+
-   "description": "WFC Export",
-   'location': '',
-   "warning": "",
-   "tracker_url": "",
-   'category': 'Development',
+    'name': 'WFC Export',
+    'author': 'Martin Donald (Original Script), Martin Schmidli',
+    'version': (1, 0, 0),
+    'blender': (2, 80, 0),  # supports 2.8+
+    "description": "WFC Export",
+    'location': '',
+    "warning": "",
+    "tracker_url": "",
+    'category': 'Development',
 }
 
-import bpy
-import bmesh
-import mathutils
-import math
-from mathutils import Vector, Matrix
-from mathutils.geometry import intersect_point_quad_2d
-from mathutils.geometry import intersect_point_tri_2d
-from mathutils.geometry import distance_point_to_plane
 
+BOUNDARY_TOLERANCE = 0.001
 MESH_NAME = "Triangle"
 debug = False
 addon_keymaps = []
+
+PROTO_NAME = "mesh_name"
+PROTO_ROTATION = "mesh_rotation"
+PROTO_NEIGHBOURS = "valid_neighbours"
+PROTO_A = "posA"
+PROTO_B = "posB"
+PROTO_C = "posC"
+PROTO_TOP = "posTop"
+PROTO_BOTTOM = "posBottom"
+PROTO_FACES = [PROTO_A, PROTO_B, PROTO_C, PROTO_TOP, PROTO_BOTTOM]
+PROTO_CONSTRAIN_TO = "constrain_to"
+PROTO_CONSTRAIN_FROM = "constrain_from"
+PROTO_WEIGHT = "weight"
+PROTO_CUSTOM_ATTRIBUTES = {
+    PROTO_CONSTRAIN_TO: "",
+    PROTO_CONSTRAIN_FROM: "",
+    PROTO_WEIGHT: 1
+}
+
+JSON_FILE = "prototype_data.json"
+MODULES_FILE = "wfc_modules"
+
+posA = 0
+posB = 1
+posC = 2
+posTop = 3
+posBot = 4
 
 print("****************")
 print("******START*********")
 print("******Version 1.1*********")
 print("****************")
 
+
 def duplicateMesh(obj):
     dup = obj.copy()
     dup.data = obj.data.copy()
     return dup
+
 
 def create_redmarker(co, name):
     # Create a new sphere mesh
@@ -59,7 +90,8 @@ def create_redmarker(co, name):
     # Set the sphere's radius
     sphere.scale = (0.1, 0.1, 0.1)  # Set the scale to adjust the sphere's size
 
-def compare_vertices(v1,v2):
+
+def compare_vertices(v1, v2):
     if v1.x != v2.x:
         return False
     if v1.y != v2.y:
@@ -68,6 +100,7 @@ def compare_vertices(v1,v2):
         return False
     return True
 
+
 def move_to_origin(obj):
     loc = obj.location
     obj.location = Vector([0.0, 0.0, 0.0])
@@ -75,7 +108,8 @@ def move_to_origin(obj):
     bm.from_mesh(obj.data)
     bmesh.ops.translate(bm, vec=[-loc.x, -loc.y, -loc.z], verts=bm.verts)
     bm.to_mesh(obj.data)
-    
+
+
 def create_referenceobject():
     # Create a new mesh data block
     mesh = bpy.data.meshes.new("ReferenceMesh")
@@ -103,16 +137,16 @@ def create_referenceobject():
     f3 = bm.faces.new((v1, v4, v6, v3))
     f4 = bm.faces.new((v6, v3, v2, v5))
     f5 = bm.faces.new((v1, v2, v5, v4))
-    
+
     # Update the bmesh and create a new object from the mesh data
     bm.to_mesh(mesh)
     mesh.update()
     obj = bpy.data.objects.new("ReferenceObject", mesh)
-    
+
     # Get the mesh data
     mesh = obj.data
 
-    ### Set the origin to the volumes center
+    # Set the origin to the volumes center
     center = sum((v.co for v in mesh.vertices), Vector()) / len(mesh.vertices)
 
     # Move the object to the origin
@@ -123,8 +157,8 @@ def create_referenceobject():
 
     # Set the origin of the object to the center of the mesh
     bpy.ops.object.origin_set(type='ORIGIN_GEOMETRY', center='MEDIAN')
-    
-    ### Move the object to the 0,0,0
+
+    # Move the object to the 0,0,0
     # Calculate the center of the mesh
     center = Vector((0.0, 0.0, 0.0))
     for v in mesh.vertices:
@@ -132,15 +166,16 @@ def create_referenceobject():
     center /= len(mesh.vertices)
 
     # Set the origin to the center of the mesh
-    obj.matrix_world.translation = -center 
-      
-    ### Debug_Only: Show in the scene  
+    obj.matrix_world.translation = -center
+
+    # Debug_Only: Show in the scene
     # Link the object to the scene and make it active
     if debug == True:
         scene = bpy.context.scene
         scene.collection.objects.link(obj)
-    
+
     return obj
+
 
 def compareConnections(b1, b2):
     # Compare two boundaries and return True if they're the same
@@ -151,11 +186,11 @@ def compareConnections(b1, b2):
             else:
                 return False
         return True
-    
+
     # It's okay if the lengths don't match, in this case we check if the larger array
     # contains all members of the smaller, and consider it a match if so
     elif len(b1) > len(b2):
-        
+
         for v in b2:
             if v in b1:
                 continue
@@ -170,12 +205,14 @@ def compareConnections(b1, b2):
                 return False
         return True
 
+
 def round_position(vec, i):
     result = Vector([0.0, 0.0, 0.0])
     result.x = round(vec.x, i)
     result.y = round(vec.y, i)
     result.z = round(vec.z, i)
     return result
+
 
 def connectionExistsInDictionary(connection, connectionDictionary):
     if len(connectionDictionary.keys()) == 0:
@@ -185,111 +222,84 @@ def connectionExistsInDictionary(connection, connectionDictionary):
             return connectionName
     return False
 
+
 def flipConnection(connection):
     newConnection = list()
     for vert in connection:
         newVert = vert.copy()
         newVert.y *= -1.0
         newConnection.append(newVert)
-    return newConnection    
- 
-def find_connections(obj):
+    return newConnection
+
+
+def rotate_mesh_120(bm):
+    rot = Matrix.Rotation(math.radians(-120), 4, Vector([0.0, 0.0, 1.0]))
+    bmesh.ops.rotate(bm, cent=Vector(
+        [0.0, 0.0, 0.0]), matrix=rot, verts=bm.verts)
+
+
+def find_connections_horizontal(obj):
     orientation = "up"
+    boundaryY = -0.2887  # Triangle lowest part on Y Axis. Top down view.
+    boundaries = [list(), list(), list()]
 
     field = bmesh.new()
     field.from_mesh(obj.data)
-    
-    # print(field.verts)    
-    # print(reference.verts)
-    
+
     # check orientation of triangle up/down
     if "orientation" in obj.keys():
-        print("orientation",obj["orientation"])
+        print("orientation", obj["orientation"])
         orientation = obj["orientation"]
-    
-    foundCollisionPoints = list()
-    
-    for face in reference.faces:
-        collision_points = list()
-             
-        #print(len(field.verts))  
-          
-        for vertOfField in field.verts:
-            #print("Check Vertex {}", vertOfField.co)
-                        
-            # first check, calculate distance to plane         
-            distancePointToPlane = distance_point_to_plane(vertOfField.co, face.verts[0].co, face.normal)
-            #print(distancePointToPlane)
+
+    for i in range(3):
+        for vert in field.verts:
+            # We measure if the vertice y point is on or near the "reference" line
+            if vert.co.y <= boundaryY + BOUNDARY_TOLERANCE:
+                nice_pos = round_position(vert.co, 4)
+                boundaries[i].append(nice_pos)
+        # Rotate 120 degres so every side of the trianlge is aligned to the X Axis
+        rotate_mesh_120(field)
+
+    return boundaries
 
 
-            # distance must be 0 or within a certain range -0.1 to +0.1
-            if (distancePointToPlane < 0.1 and distancePointToPlane > -0.1): # find a better value for this          
-                insideFace = 0
-                
-                # second check, check if point is within face
-                if len(face.verts) == 4:
-                    insideFace = intersect_point_quad_2d(vertOfField.co, face.verts[0].co,face.verts[1].co,face.verts[2].co,face.verts[3].co)
-                             
-                if len(face.verts) == 3:
-                    insideFace = intersect_point_tri_2d(vertOfField.co,face.verts[0].co,face.verts[1].co,face.verts[2].co)
-                
-                if (insideFace == 1) and (vertOfField.co not in collision_points):
-                    roundedPosition = round_position(vertOfField.co, 4)
-                    collision_points.append(roundedPosition)
-                
-        # debug only: Print the collision points
-        if debug == True:
-            for point in collision_points:
-                create_redmarker(point, "face"+str(face.index))
-                print(point)
-        
-        # add the found connections to the collection 
-        if len(collision_points) > 0:
-            print("collisionspoints",collision_points)
-            foundCollisionPoints.append(collision_points)  
-    
-    # return connections
-    return foundCollisionPoints          
-        
-
-def export_selection():
+def hash_boundaries(allObjects):
     connectionDictionary = dict()
-    modules = list() 
-    
+    modules = list()
     mi = 0  # Used to name meshes, incremented whenever we copy a module
     bi = 0  # Used to name boundaries, incremented whenever a new one is found
-
-    # Get a list of all selected objects in the scene
-    allObjects = bpy.context.selected_objects
-        
-    referenceObject = create_referenceobject()
 
     # Loop through each selected object
     for obj in allObjects:
 
         # Output name of Triangle
         print("***** Handle Mesh:", obj.name)
-        print("stored connections", connectionDictionary) 
-            
-        copy = duplicateMesh(obj) 
-        move_to_origin(copy) # move to center 0,0,0
+        print("stored connections", connectionDictionary)
+
+        copy = duplicateMesh(obj)
+
+        move_to_origin(copy)  # move to center 0,0,0
         copy.name = MESH_NAME + str(mi)
         modules.append(copy)
-        
-        connections = find_connections(copy)
-        print("Found connections: ",len(connections))
+
+        connections = find_connections_horizontal(copy)
+        print("Found connections: ", len(connections))
         # print(connections)
-        
+
+        # All ConnectionNames are stored on the copy of the module 
+        # this ensures that we can later access this informatio and know which side of the triangle modules has which conectionName assigned
+        # copy.data => 0 (Rotation 0) = ConnectionName
         for i, connection in enumerate(connections):
-            
+
             if len(connection) == 0:
                 # no connection at all, we need the empty connection (-1) here
                 copy.data[str(i)] = "-1"
                 continue
 
-            existingConnection = connectionExistsInDictionary(connection, connectionDictionary) 
+            existingConnection = connectionExistsInDictionary(
+                connection, connectionDictionary)
             print("found existing connection", existingConnection)
-            
+
             if existingConnection:
                 print("existing connection")
                 copy.data[str(i)] = existingConnection
@@ -307,11 +317,52 @@ def export_selection():
                 copy.data[str(i)] = new_name
                 bi += 1
 
-        #bpy.context.collection.objects.link(copy)  #  link to scene in case we want to see what we exported
+        # bpy.context.collection.objects.link(copy)  #  link to scene in case we want to see what we exported
         mi += 1
-    
-    print("final",connectionDictionary)
-    return modules 
+
+    print("final", connectionDictionary)
+    return modules
+
+
+def create_module_prototypes(modules):
+    all_prototypes = dict()
+    pi = 0
+
+    for module in modules:
+        prototypes = list()
+        # we create a prototype of the main module for all rotations of the module
+        # range(3) because we have 3 possible positions/rotations on the final field
+        for i in range(3):
+            prototype = dict()
+            prototype[PROTO_NAME] = module.name
+            prototype[PROTO_ROTATION] = i
+            prototype[PROTO_A] = module.data[str((posA + (i * 2)) % 3)]
+            prototype[PROTO_B] = module.data[str((posB + (i * 2)) % 3)]
+            prototype[PROTO_C] = module.data[str((posC + (i * 2)) % 3)]
+
+            # prototype = _add_custom_constraints(prototype, module)
+
+            all_prototypes["{}{}".format("p", pi)] = prototype
+            pi += 1
+
+    all_prototypes["p-1"] = _blank_prototype()
+
+    return all_prototypes
+
+
+def _blank_prototype():
+    proto = dict()
+    proto[PROTO_NAME] = "-1"
+    proto[PROTO_ROTATION] = 0
+    proto[PROTO_A] = "-1f"
+    proto[PROTO_B] = "-1f"
+    proto[PROTO_C] = "-1f"
+    proto[PROTO_TOP] = "-1f"
+    proto[PROTO_BOTTOM] = "-1f"
+    proto[PROTO_CONSTRAIN_TO] = "-1"
+    proto[PROTO_CONSTRAIN_FROM] = "-1"
+    proto[PROTO_WEIGHT] = 1
+    return proto
 
 
 class WFCExport(bpy.types.Operator):
@@ -321,17 +372,24 @@ class WFCExport(bpy.types.Operator):
     bl_options = {'REGISTER', 'UNDO'}
 
     def execute(self, context):
-        export_selection()
+        # Get a list of all selected objects in the scene
+        allObjects = bpy.context.selected_objects
+        module_meshes = hash_boundaries(allObjects)
+        prototypes = create_module_prototypes(module_meshes)
+
         return {'FINISHED'}
+
 
 def register():
     bpy.utils.register_class(WFCExport)
 
-     # handle the keymap
+    # handle the keymap
     wm = bpy.context.window_manager
-    km = wm.keyconfigs.addon.keymaps.new(name='Object Mode', space_type='EMPTY')
+    km = wm.keyconfigs.addon.keymaps.new(
+        name='Object Mode', space_type='EMPTY')
 
-    kmi = km.keymap_items.new(WFCExport.bl_idname, 'T', 'PRESS', ctrl=True, shift=True)
+    kmi = km.keymap_items.new(WFCExport.bl_idname, 'T',
+                              'PRESS', ctrl=True, shift=True)
 
     addon_keymaps.append((km, kmi))
 
@@ -339,7 +397,7 @@ def register():
 def unregister():
     bpy.utils.unregister_class(WFCExport)
 
-     # handle the keymap
+    # handle the keymap
     for km, kmi in addon_keymaps:
         km.keymap_items.remove(kmi)
     addon_keymaps.clear()
